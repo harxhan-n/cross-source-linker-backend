@@ -1,0 +1,44 @@
+[
+    {
+        "field_name": "ref_code",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    },
+    {
+        "field_name": "invoice_id",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    },
+    {
+        "field_name": "po_number",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    },
+    {
+        "field_name": "purchase_order",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    },
+    {
+        "field_name": "customer_email",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    },
+    {
+        "field_name": "email",
+        "type": "string",
+        "required": true,
+        "has_influence": true,
+        "is_active": true
+    }
+]

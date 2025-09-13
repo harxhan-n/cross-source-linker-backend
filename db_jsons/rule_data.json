@@ -1,0 +1,42 @@
+[
+    {
+        "rule_name": "PO Match",
+        "description": "Checks if the source field 'po_number' is contained within the target field 'purchase_order'. Used for matching purchase orders between systems.",
+        "source_field": "po_number",
+        "target_field": "purchase_order",
+        "match_classification": "Match",
+        "match_type": "Contains/Substr",
+        "tie-breaker": false,
+        "weight": 100,
+        "rationale_statement": "Matched because source[{src_field}]='{src_value}' is in target[{tgt_field}]='{tgt_value}",
+        "is_active": true,
+        "rule_id": 2
+    },
+    {
+        "rule_name": "Id Match",
+        "description": "Checks if the source field 'invoice_id' is contained within the target field 'ref_code'. Used for matching invoice IDs between systems.",
+        "source_field": "invoice_id",
+        "target_field": "ref_code",
+        "match_classification": "Match",
+        "match_type": "Contains/Substr",
+        "tie-breaker": false,
+        "weight": 100,
+        "rationale_statement": "Matched because source[{src_field}]='{src_value}' is in target[{tgt_field}]='{tgt_value}'",
+        "is_active": true,
+        "rule_id": 1
+    },
+    {
+        "rule_name": "Email Match",
+        "source_field": "customer_email",
+        "target_field": "email",
+        "match_classification": "Match",
+        "match_type": "Exact",
+        "tie-breaker": false,
+        "weight": 100,
+        "description": "The rule checks for the email address of the customer based on the source field - customer_email and target field - email.While matching the source and target, we need to ensure that there are no empty spaces between the source and target fields.We also have to ensure that no spaces are in between the fields such as 'har shan@gmail.com'. Finally, then check for exact match of the strings",
+        "rationale_statement": "Matched using the Email Address of the customer!",
+        "is_active": true,
+        "code_block": "def rule_code_block(source_value, target_value):\n    \"\"\"\n    Checks for the email address of the customer based on the source field - customer_email and target field - email.\n    Ignores spaces and case when matching.\n    \"\"\"\n    if not source_value or not target_value:\n        return False\n    # Remove all spaces and compare lowercase\n    s = str(source_value).replace(' ', '').lower()\n    t = str(target_value).replace(' ', '').lower()\n    return s == t",
+        "rule_id": 3
+    }
+]

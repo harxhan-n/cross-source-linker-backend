@@ -1,0 +1,4 @@
+{
+    "match_classification": ["Match", "Ignore"],
+    "match_types": ["Exact", "Case-Insensitive", "Prefix", "Suffix", "Contains/Substr", "Fuzzy", "Numeric Combinations", "Date Range", "Custom"]
+}

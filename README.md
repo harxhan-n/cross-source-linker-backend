@@ -45,7 +45,45 @@ venv/ (not tracked)
    ```
    pip install -r requirements.txt
    ```
-3. Set up your `.env` file with required API keys and config.
+
+3. Set up credentials for Google API and agent services:
+
+### Credentials Setup
+
+**Step 1: .env file**
+
+Create a file named `.env` in the project root with the following content:
+
+```
+GOOGLE_API_KEY=your_google_api_key_here
+```
+
+Replace `your_google_api_key_here` with your actual Google API key. This is required for LLM/agent features.
+
+**Step 2: credentials.json**
+
+Download your Google Cloud OAuth credentials and save them as `credentials.json` in the project root. The file should look like this:
+
+```
+{
+  "installed": {
+    "client_id": "...",
+    "project_id": "...",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "...",
+    "redirect_uris": ["http://localhost"]
+  }
+}
+```
+
+**Step 3: token.pickle**
+
+This file is generated automatically after the first successful OAuth authentication. You do not need to create it manually. It stores your access/refresh tokens securely.
+
+**Important:**
+- Never commit `.env`, `credentials.json`, or `token.pickle` to version control. These are already excluded by `.gitignore`.
 
 ## Running the App
 ```

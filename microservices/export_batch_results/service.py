@@ -176,14 +176,10 @@ def export_batch_results(request):
     for rec in matched + suspected:
         rule_rows.append({
             'rule_id': rec.get('rule_id'),
-            'weight': rec.get('weight'),
-            'tie_breaker': rec.get('tie-breaker'),
             'rationale_statement': rec.get('rationale_statement')
         })
     import collections
     rule_ids = [r['rule_id'] for r in rule_rows if r['rule_id'] is not None]
-    weights = [r['weight'] for r in rule_rows if isinstance(r['weight'], (int, float))]
-    tie_breakers = [r['tie_breaker'] for r in rule_rows if r['tie_breaker']]
     rule_counter = collections.Counter(rule_ids)
     most_common_rule = rule_counter.most_common(1)[0] if rule_counter else (None, 0)
 
@@ -200,10 +196,6 @@ def export_batch_results(request):
         ("Unique Rules Applied", len(set(rule_ids))),
         ("Most Frequent Rule", str(most_common_rule[0]) if most_common_rule[0] else "-"),
         ("Most Frequent Rule Count", most_common_rule[1]),
-        ("Average Weight", round(sum(weights)/len(weights), 2) if weights else "-"),
-        ("Min Weight", min(weights) if weights else "-"),
-        ("Max Weight", max(weights) if weights else "-"),
-        ("Tie-breaker Usage Count", len(tie_breakers)),
     ]
     for j, (k, v) in enumerate(metrics, rule_start_row+1):
         cell_key = ws_report.cell(row=j, column=1, value=k)

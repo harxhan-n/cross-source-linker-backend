@@ -15,7 +15,7 @@ def add_rule_data(rule_dict):
     print(f"[INFO] add_rule_data called with: {rule_dict}")
     match_classification_options, match_type_options = get_static_options()
     # Validate required fields
-    required_fields = ["rule_name", "description", "source_field", "target_field", "match_classification", "match_type", "tie-breaker", "weight", "rationale_statement"]
+    required_fields = ["rule_name", "description", "source_field", "target_field", "match_classification", "match_type", "rationale_statement"]
     missing = [k for k in required_fields if k not in rule_dict]
     if missing:
         raise ValueError(f"Missing required key(s): {', '.join(missing)}")
@@ -35,6 +35,43 @@ def add_rule_data(rule_dict):
         raise ValueError(f"source_field '{rule_dict['source_field']}' does not exist in active fields.")
     if rule_dict["target_field"] not in active_field_names:
         raise ValueError(f"target_field '{rule_dict['target_field']}' does not exist in active fields.")
+    
+    # Load existing rules to check for duplicates
+    try:
+        with open(RULE_DATA_PATH, 'r', encoding='utf-8') as f:
+            existing_rules = json.load(f)
+    except Exception:
+        existing_rules = []
+    
+    # Check for duplicate rule name
+    rule_name = rule_dict["rule_name"]
+    name_duplicates = [r for r in existing_rules if r.get("rule_name") == rule_name and r.get("is_active", True)]
+    if name_duplicates:
+        raise ValueError(f"Rule with name '{rule_name}' already exists. Please use a different rule name.")
+    
+    # Check for duplicate rule definition (same source/target fields, match classification, and match type)
+    source_field = rule_dict["source_field"]
+    target_field = rule_dict["target_field"]
+    match_classification = rule_dict["match_classification"]
+    match_type = rule_dict["match_type"]
+    
+    definition_duplicates = [
+        r for r in existing_rules if (
+            r.get("source_field") == source_field and
+            r.get("target_field") == target_field and
+            r.get("match_classification") == match_classification and
+            r.get("match_type") == match_type and
+            r.get("is_active", True)
+        )
+    ]
+    
+    if definition_duplicates:
+        duplicate = definition_duplicates[0]
+        raise ValueError(
+            f"A rule with identical definition already exists: Rule ID {duplicate.get('rule_id')}, "
+            f"'{duplicate.get('rule_name')}'. The rule has the same source field, target field, "
+            f"match classification, and match type."
+        )
 
     # Remove code_block if present
     rule = {k: v for k, v in rule_dict.items() if k != "code_block"}

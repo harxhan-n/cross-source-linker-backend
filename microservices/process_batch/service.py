@@ -2,10 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import json
+from collections import defaultdict
 
 def process_batch(request):
-    # Step 6: Log batch summary to batch_data.json (only after all variables are defined)
-    
     # Step 1: Parse form data and files
     batch_name = request.form.get('batch_name')
     source_file = request.files.get('source_file')
@@ -16,6 +15,7 @@ def process_batch(request):
             "status_message": "BAD REQUEST",
             "message": "batch_name, source_file, and target_file are required."
         }, 400
+        
     # Step 2: Check if batch already exists
     batch_dir = os.path.join('batch_information', batch_name)
     if os.path.exists(batch_dir):
@@ -33,14 +33,29 @@ def process_batch(request):
     # Step 3: Load files into DataFrames
     def load_df(path):
         if path.endswith('.csv'):
-            return pd.read_csv(path)
+            df = pd.read_csv(path)
         elif path.endswith('.xls') or path.endswith('.xlsx'):
-            return pd.read_excel(path)
+            df = pd.read_excel(path)
         else:
             raise ValueError('Unsupported file type. Only CSV and Excel are supported.')
+            
+        # Ensure consistent column order by sorting columns alphabetically
+        # This helps maintain consistent matching behavior
+        df = df.sort_index(axis=1)
+        return df
+        
     try:
         df_source = load_df(source_path)
         df_target = load_df(target_path)
+        
+        # Print DataFrame info for debugging
+        print(f"[DEBUG] process_batch: Loaded source dataframe from {source_path}")
+        print(f"[DEBUG] process_batch: Source DataFrame shape: {df_source.shape}")
+        print(f"[DEBUG] process_batch: Source DataFrame columns: {sorted(df_source.columns.tolist())}")
+        
+        print(f"[DEBUG] process_batch: Loaded target dataframe from {target_path}")
+        print(f"[DEBUG] process_batch: Target DataFrame shape: {df_target.shape}")
+        print(f"[DEBUG] process_batch: Target DataFrame columns: {sorted(df_target.columns.tolist())}")
     except Exception as e:
         return {
             "status_code": 400,
@@ -51,7 +66,10 @@ def process_batch(request):
     # Step 4: Load active rules
     RULE_DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'db_jsons', 'rule_data.json'))
     with open(RULE_DATA_PATH, 'r', encoding='utf-8') as f:
-        rules = [r for r in json.load(f) if r.get('is_active') is True]
+        all_rules = json.load(f)
+        # Sort rules by rule_id to ensure consistent processing order
+        all_rules.sort(key=lambda r: r.get('rule_id', 0))
+        rules = [r for r in all_rules if r.get('is_active') is True]
 
     # Only keep rules with valid source/target fields in the files
     valid_rules = []
@@ -60,6 +78,11 @@ def process_batch(request):
         tgt_field = rule.get('target_field')
         if src_field in df_source.columns and tgt_field in df_target.columns:
             valid_rules.append(rule)
+            
+    # Print active rules being used
+    print(f"[DEBUG] Process batch using {len(valid_rules)} rules:")
+    for rule in valid_rules:
+        print(f"  - Rule {rule.get('rule_id')}: {rule.get('rule_name')} ({rule.get('source_field')} -> {rule.get('target_field')})")
 
     # Step 5: Record comparison and classification
     def convert_obj(obj):
@@ -81,24 +104,19 @@ def process_batch(request):
     suspected = []
     unmatched_source = set(df_source.index)
     unmatched_target = set(df_target.index)
-    rule_results = []
+    
     for rule in valid_rules:
         src_field = rule['source_field']
         tgt_field = rule['target_field']
         code_block = rule.get('code_block')
-        used_targets = set()
-        used_sources = set()
         for src_idx, src_row in df_source.iterrows():
-            if src_idx in used_sources:
-                continue
             for tgt_idx, tgt_row in df_target.iterrows():
-                if tgt_idx in used_targets:
-                    continue
                 src_dict = src_row.to_dict()
                 tgt_dict = tgt_row.to_dict()
                 local_env = {'source': src_dict, 'target': tgt_dict}
                 try:
                     if code_block:
+                        # First try to run as a function definition (rule_code_block)
                         func_env = {}
                         try:
                             exec(code_block, func_env)
@@ -107,12 +125,18 @@ def process_batch(request):
                                 match = rule_func(src_dict.get(src_field), tgt_dict.get(tgt_field))
                             else:
                                 match = eval(compile(code_block, '<string>', 'eval'), {}, local_env)
-                        except Exception:
+                        except Exception as ex:
+                            print(f"[DEBUG] Error executing code_block as function, trying as expression: {ex}")
                             match = eval(compile(code_block, '<string>', 'eval'), {}, local_env)
                     else:
                         match = src_row[src_field] == tgt_row[tgt_field]
                 except Exception as e:
+                    print(f"[DEBUG] Error in rule matching: {e}")
                     match = False
+                # Add debug for email matches
+                if rule.get('rule_name') == 'Email Match':
+                    print(f"[DEBUG] Email rule check: source={src_dict.get(src_field)}, target={tgt_dict.get(tgt_field)}, match={match}")
+                
                 if match:
                     rationale_template = rule.get('rationale_statement') or ""
                     try:
@@ -133,41 +157,48 @@ def process_batch(request):
                         'target_record': tgt_dict,
                         'rule_id': rule['rule_id'],
                         'rule': rule,
-                        'weight': rule.get('weight'),
-                        'tie-breaker': rule.get('tie-breaker'),
                         'src_field': src_field,
                         'tgt_field': tgt_field,
                         'rationale_statement': rationale
                     })
-                    used_sources.add(src_idx)
-                    used_targets.add(tgt_idx)
                     if src_idx in unmatched_source:
                         unmatched_source.remove(src_idx)
                     if tgt_idx in unmatched_target:
                         unmatched_target.remove(tgt_idx)
-                    break  # Stop after unique match for this source
 
-    # Suspected: source or target index appears in more than one match
-    # Count occurrences
-    src_counts = {}
-    tgt_counts = {}
+    # Organize matches by source-target pairs to identify multiple rule matches for the same pair
+    src_tgt_pairs = defaultdict(list)
     for m in matched:
-        src_counts[m['source_index']] = src_counts.get(m['source_index'], 0) + 1
-        tgt_counts[m['target_index']] = tgt_counts.get(m['target_index'], 0) + 1
-
-    # Find all source/target indices with duplicates
-    duplicate_src = {idx for idx, count in src_counts.items() if count > 1}
-    duplicate_tgt = {idx for idx, count in tgt_counts.items() if count > 1}
-
-    # All matches with a duplicate source or target go to suspected
-    suspected_flat = [m for m in matched if m['source_index'] in duplicate_src or m['target_index'] in duplicate_tgt]
-    matched_final = [m for m in matched if m not in suspected_flat]
+        pair_key = (m['source_index'], m['target_index'])
+        src_tgt_pairs[pair_key].append(m)
+    
+    # Sort matches by rule_id to ensure consistent rule priority
+    for pair_key in src_tgt_pairs:
+        src_tgt_pairs[pair_key].sort(key=lambda x: x['rule_id'])
+    
+    # If a source-target pair has multiple matches (via different rules), keep only the first one
+    # This handles one-to-one matches via multiple rules
+    unique_matches = []
+    for pair, matches in sorted(src_tgt_pairs.items()):  # Sort by pair keys for consistent ordering
+        unique_matches.append(matches[0])  # Keep only the first rule match for each pair
+    
+    # Count how many unique target records each source record matches with
+    src_to_unique_targets = defaultdict(set)
+    for m in unique_matches:
+        src_to_unique_targets[m['source_index']].add(m['target_index'])
+    
+    # Identify source records that match with multiple target records
+    duplicate_src = {src_idx for src_idx, target_set in src_to_unique_targets.items() if len(target_set) > 1}
+    
+    # Only matches where source has multiple target matches go to suspected
+    suspected_flat = [m for m in unique_matches if m['source_index'] in duplicate_src]
+    matched_final = [m for m in unique_matches if m not in suspected_flat]
 
     # Group suspected by source_index (can also do by target_index if needed)
-    from collections import defaultdict
     suspected_grouped = defaultdict(list)
     for m in suspected_flat:
         suspected_grouped[m['source_index']].append(m)
+    
     # Format as array of objects: {source_index, source_record, targets: [all suspected matches]}
     suspected = []
     for src_idx, matches in suspected_grouped.items():
@@ -227,8 +258,14 @@ def process_batch(request):
         except Exception:
             m['rationale_statement'] = rationale_template
 
-    # Remove suspected from matched
-    matched_final = [m for m in matched if m not in suspected]
+    # Print summary of matching results for debugging
+    print(f"[DEBUG] Process batch matching summary:")
+    print(f"  - Total matches found: {len(matched)}")
+    print(f"  - Unique matches (after pair deduplication): {len(unique_matches)}")
+    print(f"  - Suspected matches: {len(suspected)}")
+    print(f"  - Final matched count: {len(matched_final)}")
+    print(f"  - Unmatched source: {len(unmatched_source)}")
+    print(f"  - Unmatched target: {len(unmatched_target)}")
 
     # Prepare unmatched records
     unmatched_source_records = df_source.loc[list(unmatched_source)].to_dict(orient='records')
@@ -260,6 +297,10 @@ def process_batch(request):
             'count': len(unmatched_target_records)
         }
     }
+
+    # Debug info to help diagnose issues
+    print(f"[DEBUG] Process batch stats - Matched: {len(matched_final)}, Suspected: {len(suspected)}, "
+          f"Unmatched Source: {len(unmatched_source_records)}, Unmatched Target: {len(unmatched_target_records)}")
 
     try:
         BATCH_DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'db_jsons', 'batch_data.json'))

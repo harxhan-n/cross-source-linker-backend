@@ -21,7 +21,7 @@ def configure_fields_controller():
             return jsonify(response), 400
 
 
-        required_fields = ["field_name", "field_type", "has_influence", "requried"]
+        required_fields = ["field_name", "field_type", "description"]
         missing_keys = [k for k in required_fields if k not in req_data]
         if missing_keys:
             response = {

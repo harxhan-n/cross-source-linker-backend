@@ -21,8 +21,6 @@ class BulkRuleSuggestionAgent:
             "target_field": "email",
             "match_classification": "Match",
             "match_type": "Exact",
-            "tie-breaker": False,
-            "weight": 50,
             "rationale_statement": "Suggested by agent based on user comments.",
         }
         code_block = self.rule_agent.generate_code_block(

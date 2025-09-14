@@ -74,10 +74,10 @@ ENV/
 env/
 .venv/
 
-# Credentials and tokens
-.env
-credentials.json
-token.pickle
+# # Credentials and tokens
+# .env
+# credentials.json
+# token.pickle
 
 # OS files
 .DS_Store

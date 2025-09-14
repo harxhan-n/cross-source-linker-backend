@@ -8,8 +8,7 @@ def add_field_data(field_dict):
     new_field = {
         "field_name": field_dict["field_name"],
         "type": field_dict["field_type"],
-        "required": field_dict["requried"],
-        "has_influence": field_dict["has_influence"],
+        "description": field_dict["description"],
         "is_active": True
     }
     print(f"[DEBUG] Using field_data.json at: {FIELD_DATA_PATH}")
